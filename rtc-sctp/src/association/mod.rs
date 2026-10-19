@@ -24,7 +24,9 @@ use crate::chunk::{
     chunk_shutdown_complete::ChunkShutdownComplete,
     chunk_type::CT_FORWARD_TSN,
 };
-use crate::config::{COMMON_HEADER_SIZE, DATA_CHUNK_HEADER_SIZE, ServerConfig, TransportConfig};
+use crate::config::{
+    COMMON_HEADER_SIZE, DATA_CHUNK_HEADER_SIZE, MAX_BURST_PACKETS, ServerConfig, TransportConfig,
+};
 use crate::packet::{CommonHeader, Packet};
 use crate::param::{
     Param,
@@ -232,6 +234,7 @@ pub struct Association {
     partial_bytes_acked: u32,
     pub(crate) in_fast_recovery: bool,
     fast_recover_exit_point: u32,
+    new_data_bytes_until_next_sack: u32,
 
     // Chunks stored for retransmission
     stored_init: Option<ChunkInit>,
@@ -327,6 +330,7 @@ impl Default for Association {
             partial_bytes_acked: 0,
             in_fast_recovery: false,
             fast_recover_exit_point: 0,
+            new_data_bytes_until_next_sack: 0,
 
             // Chunks stored for retransmission
             stored_init: None,
@@ -1424,6 +1428,7 @@ impl Association {
         }
 
         self.stats.inc_sacks();
+        self.new_data_bytes_until_next_sack = self.max_burst_bytes();
 
         if sna32gt(self.cumulative_tsn_ack_point, d.cumulative_tsn_ack) {
             // RFC 4960 sec 6.2.1.  Processing a Received SACK
@@ -2910,6 +2915,10 @@ impl Association {
         })
     }
 
+    fn max_burst_bytes(&self) -> u32 {
+        self.mtu.saturating_mul(MAX_BURST_PACKETS)
+    }
+
     /// pop_pending_data_chunks_to_send pops chunks from the pending queues as many as
     /// the cwnd and rwnd allows to send.
     fn pop_pending_data_chunks_to_send(
@@ -2918,6 +2927,11 @@ impl Association {
     ) -> (Vec<ChunkPayloadData>, Vec<u16>) {
         let mut chunks = vec![];
         let mut sis_to_reset = vec![]; // stream identifiers to reset
+        if self.inflight_queue.is_empty() {
+            self.new_data_bytes_until_next_sack = self
+                .new_data_bytes_until_next_sack
+                .max(self.max_burst_bytes());
+        }
         if !self.pending_queue.is_empty() {
             // RFC 4960 sec 6.1.  Transmission of DATA Chunks
             //   A) At any given time, the data sender MUST NOT transmit new data to
@@ -2973,12 +2987,17 @@ impl Association {
                     break; // no more rwnd
                 }
 
+                if data_len > self.new_data_bytes_until_next_sack as usize {
+                    break;
+                }
+
                 if let Some(chunk) = self.move_pending_data_chunk_to_inflight_queue(
                     beginning_fragment,
                     unordered,
                     now,
                 ) {
                     self.rwnd -= data_len as u32;
+                    self.new_data_bytes_until_next_sack -= data_len as u32;
                     chunks.push(chunk);
                 } else {
                     self.fail_message_queue(Error::OtherSctpErr(

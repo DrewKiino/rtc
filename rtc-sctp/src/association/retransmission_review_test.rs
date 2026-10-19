@@ -7,6 +7,7 @@ fn recovery_window(count: u32, now: Instant) -> Result<Association> {
     a.advanced_peer_tsn_ack_point = 99;
     a.cwnd = count * a.mtu;
     a.rwnd = a.cwnd;
+    a.new_data_bytes_until_next_sack = a.cwnd;
     let ppi = PayloadProtocolIdentifier::Binary;
     let mut stream = a.open_stream(1, ppi)?;
     stream.set_reliability_params(false, ReliabilityType::Rexmit, 1)?;

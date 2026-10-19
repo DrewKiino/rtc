@@ -19,6 +19,7 @@ pub(crate) const RECEIVE_MTU: usize = 8192;
 /// from pion/sctp#476, adopted by webrtc-rs/webrtc#807 (webrtc v0.17.2).
 pub(crate) const INITIAL_MTU: u32 = 1191;
 pub(crate) const INITIAL_RECV_BUF_SIZE: u32 = 1024 * 1024;
+pub(crate) const MAX_BURST_PACKETS: u32 = 4;
 pub(crate) const COMMON_HEADER_SIZE: u32 = 12;
 pub(crate) const DATA_CHUNK_HEADER_SIZE: u32 = 16;
 /// Floor for [`max_payload_size_for_mtu`]: the smallest representable padded

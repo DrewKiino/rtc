@@ -1155,6 +1155,7 @@ fn test_timed_abandonment_discards_gap_acked_fragments() -> Result<()> {
             let mut sender = timed_test_association();
             let mut receiver = timed_test_association();
             sender.cwnd = 65536;
+            sender.new_data_bytes_until_next_sack = sender.cwnd;
             receiver.ack_mode = AckMode::NoDelay;
             receiver.peer_last_tsn = sender.my_next_tsn.wrapping_sub(1);
             let receive_window = receiver.get_my_receiver_window_credit();
