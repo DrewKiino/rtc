@@ -25,13 +25,6 @@ pub(crate) struct SctpHandlerContext {
     pub(crate) write_outs: VecDeque<TaggedRTCMessageInternal>,
     pub(crate) event_outs: VecDeque<TaggedRTCEventInternal>,
 
-    // Batch-drain state: handle_read/handle_write/handle_timeout only INGEST (set
-    // `flush_dirty`); the single transmit flush runs in poll_write, once per driver
-    // event-loop iteration. Paired with the driver's burst-read, N received DATA
-    // chunks are processed before one flush, so the ack machine coalesces them into
-    // ONE SACK (1st arms Delay, 2nd+ stay Immediate until flushed) instead of one
-    // SACK per two packets — cutting sendto/recvfrom and amortizing per-iteration
-    // cost. `now` carries the newest timestamp seen into that flush.
     flush_dirty: bool,
 
     /// Set by [`SctpHandler::request_abort`]: abort every association at the next `poll_write`.
@@ -287,10 +280,6 @@ impl<'a> SctpHandler<'a> {
         self.flush_transmits(self.ctx.now);
     }
 
-    /// Batch-drain flush: gather every association's pending outbound in one pass
-    /// into `write_outs`. Called once per event-loop iteration from poll_write when
-    /// `flush_dirty` is set, after a burst of inbound packets has been ingested, so
-    /// their SACKs coalesce into a single datagram.
     fn flush_transmits(&mut self, now: Instant) {
         for conn in self.ctx.sctp_transport.sctp_associations.values_mut() {
             while let Some(x) = conn.poll_transmit(now) {

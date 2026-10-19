@@ -965,11 +965,13 @@ impl Association {
 
     fn handle_chunk_end(&mut self, now: Instant) {
         if self.immediate_ack_triggered {
-            self.ack_state = AckState::Immediate;
+            let sack = self.create_selective_ack_chunk();
+            let sack_packet = self.create_packet(vec![Box::new(sack)]);
+            self.control_queue.push_back(sack_packet);
+            self.ack_state = AckState::Idle;
             self.timers.stop(Timer::Ack);
             self.awake_write_loop();
         } else if self.delayed_ack_triggered {
-            // Will send delayed ack in the next ack timeout
             self.ack_state = AckState::Delay;
             self.timers.start(Timer::Ack, now, ACK_INTERVAL);
         }
