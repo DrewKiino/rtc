@@ -86,6 +86,11 @@ impl ClientBuilder {
         self
     }
 
+    pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
+        self.settings.max_attempts = max_attempts;
+        self
+    }
+
     /// with_timeout_rate sets RTO timer minimum resolution.
     pub fn with_timeout_rate(mut self, d: Duration) -> Self {
         self.settings.rto_rate = d;
